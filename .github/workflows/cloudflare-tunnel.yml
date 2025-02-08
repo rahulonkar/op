@@ -1,0 +1,7 @@
+tunnel: my-tunnel
+credentials-file: /home/runner/.cloudflared/my-tunnel.json
+
+ingress:
+  - service: tcp://localhost:0  # Expose all TCP ports
+  - service: udp://localhost:0  # Expose all UDP ports
+  - service: http_status:404  # Default for unknown requests
