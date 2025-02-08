@@ -8,52 +8,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install Required Packages
+      - name: Install Dependencies
         run: |
           sudo apt update && sudo apt install -y openssh-server curl jq
           sudo systemctl enable --now ssh
 
-      - name: Set Runner Password for SSH
+      - name: Set SSH Password and Enable Root Login
         run: |
           echo "runner:Money090" | sudo chpasswd
           sudo sed -i 's/^#PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
           sudo sed -i 's/^#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
           sudo systemctl restart ssh
 
-      - name: Download Cloudflare Tunnel
+      - name: Install Cloudflare Tunnel
         run: |
           curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
           chmod +x cloudflared
           sudo mv cloudflared /usr/local/bin/
 
-      - name: Authenticate Cloudflare Tunnel
+      - name: Authenticate Cloudflare Tunnel (Requires `CLOUDFLARE_TUNNEL_JSON`)
         run: |
           mkdir -p ~/.cloudflared
           echo '${{ secrets.CLOUDFLARE_TUNNEL_JSON }}' > ~/.cloudflared/my-tunnel.json
-
-      - name: Create Cloudflare Tunnel Config
-        run: |
-          cat <<EOF > ~/.cloudflared/config.yml
-          tunnel: my-tunnel
+          echo "tunnel: my-tunnel
           credentials-file: /home/runner/.cloudflared/my-tunnel.json
           ingress:
-            - hostname: "*"
-              service: tcp://localhost:0
-            - service: http_status:404
-          EOF
+            - hostname: my-tunnel.example.com
+              service: ssh://localhost:22
+            - hostname: '*'
+              service: http_status:404" > ~/.cloudflared/config.yml
 
       - name: Start Cloudflare Tunnel
         run: nohup cloudflared tunnel --config ~/.cloudflared/config.yml run my-tunnel &
 
-      - name: Wait for Tunnel to Start
-        run: sleep 10
-
-      - name: Fetch Cloudflare Tunnel Public IP
+      - name: Display Cloudflare Tunnel Hostname
         run: |
-          TUNNEL_LOGS=$(cloudflared tunnel info my-tunnel)
-          echo "Cloudflare Tunnel Info:"
-          echo "$TUNNEL_LOGS"
-          echo "$TUNNEL_LOGS" | grep -Eo 'tcp://[^ ]+' || echo "No TCP endpoint found."
+          sleep 5  # Wait for tunnel to initialize
+          echo "✅ Use this to SSH into your GitHub runner:"
+          echo "ssh -o ProxyCommand=\"cloudflared access ssh --hostname my-tunnel.example.com\" runner@localhost"
 
       - name: Keep Runner Alive
         run: sleep infinity
