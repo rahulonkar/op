@@ -24,7 +24,7 @@ jobs:
       - name: Install and Register Remote.it
         run: |
           # Replace with your actual Remote.it registration code
-          R3_REGISTRATION_CODE="${{ secrets.REMOTEIT_REGISTRATION_CODE }}" sh -c "$(curl -L https://downloads.remote.it/remoteit/install_agent.sh)"
+          R3_REGISTRATION_CODE="098142DF-5858-5DB4-8B58-2CAF0A514535" sh -c "$(curl -L https://downloads.remote.it/remoteit/install_agent.sh)"
 
       - name: Expose All TCP Ports via Remote.it
         run: |
