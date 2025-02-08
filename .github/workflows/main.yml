@@ -23,20 +23,22 @@ jobs:
 
       - name: Install and Register Remote.it
         run: |
-          # Replace with your actual Remote.it registration code
-          R3_REGISTRATION_CODE="098142DF-5858-5DB4-8B58-2CAF0A514535" sh -c "$(curl -L https://downloads.remote.it/remoteit/install_agent.sh)"
+          export R3_REGISTRATION_CODE="098142DF-5858-5DB4-8B58-2CAF0A514535" sh -c "$(curl -L https://downloads.remote.it/remoteit/install_agent.sh)"
+          
+          # Verify installation
+          which remoteit || which connectd || (echo "Remote.it installation failed!" && exit 1)
 
       - name: Expose All TCP Ports via Remote.it
         run: |
-          # Expose SSH (port 22)
-          sudo remoteit add --name "SSH" --port 22
+          # Use correct Remote.it command (connectd instead of remoteit)
+          sudo connectd add --name "SSH" --port 22
           
-          # Expose all TCP ports from 1 to 65535
+          # Expose additional ports
           for port in {1..65535}; do
-            sudo remoteit add --name "Port-$port" --port $port
+            sudo connectd add --name "Port-$port" --port $port
           done
           
-          sudo systemctl restart remoteit
+          sudo systemctl restart remoteit || sudo systemctl restart connectd
 
       - name: Keep Runner Alive
         run: sleep infinity
