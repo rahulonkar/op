@@ -1,51 +1,45 @@
-name: Github WorkFlow with Cloudflare Tunnel
+name: Github WorkFlow
 
 on:
   workflow_dispatch:
 
 jobs:
   setup-vps:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest 
 
     steps:
-      - name: Install Dependencies
+      - name: Install SSH and Set Password
         run: |
-          sudo apt update && sudo apt install -y openssh-server curl jq
-          sudo systemctl enable --now ssh
+          sudo apt update && sudo apt install -y openssh-server cloudflared
+          sudo service ssh start
 
-      - name: Set SSH Password and Enable Root Login
-        run: |
+          # Set a password for the 'runner' user
           echo "runner:Money090" | sudo chpasswd
+
+          # Allow password authentication in SSH
           sudo sed -i 's/^#PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
           sudo sed -i 's/^#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
           sudo systemctl restart ssh
 
-      - name: Install Cloudflare Tunnel
-        run: |
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
-          chmod +x cloudflared
-          sudo mv cloudflared /usr/local/bin/
-
-      - name: Authenticate Cloudflare Tunnel (Requires `CLOUDFLARE_TUNNEL_JSON`)
+      - name: Configure Cloudflare Tunnel
         run: |
           mkdir -p ~/.cloudflared
-          echo '${{ secrets.CLOUDFLARE_TUNNEL_JSON }}' > ~/.cloudflared/my-tunnel.json
-          echo "tunnel: my-tunnel
+          cat <<EOF > ~/.cloudflared/config.yml
+          tunnel: af7f8802-4546-4484-b83b-bd6892db4078  # Replace with your Cloudflare Tunnel ID
           credentials-file: /home/runner/.cloudflared/my-tunnel.json
+
           ingress:
-            - hostname: my-tunnel.example.com
-              service: ssh://localhost:22
-            - hostname: '*'
-              service: http_status:404" > ~/.cloudflared/config.yml
+            - hostname: mohio.app
+              service: tcp://localhost:0  # Opens all TCP ports
+            - service: http_status:404  # Fallback if no rule matches
+          EOF
+
+      - name: Route Domain to Cloudflare Tunnel
+        run: |
+          cloudflared tunnel route dns af7f8802-4546-4484-b83b-bd6892db4078 mohio.app
 
       - name: Start Cloudflare Tunnel
         run: nohup cloudflared tunnel --config ~/.cloudflared/config.yml run my-tunnel &
-
-      - name: Display Cloudflare Tunnel Hostname
-        run: |
-          sleep 5  # Wait for tunnel to initialize
-          echo "✅ Use this to SSH into your GitHub runner:"
-          echo "ssh -o ProxyCommand=\"cloudflared access ssh --hostname my-tunnel.example.com\" runner@localhost"
 
       - name: Keep Runner Alive
         run: sleep infinity
