@@ -8,9 +8,9 @@ jobs:
     runs-on: ubuntu-latest 
 
     steps:
-      - name: Install SSH and Set Password
+      - name: Install SSH and Cloudflared
         run: |
-          sudo apt update && sudo apt install -y openssh-server cloudflared
+          sudo apt update && sudo apt install -y openssh-server
           sudo service ssh start
 
           # Set a password for the 'runner' user
@@ -20,6 +20,11 @@ jobs:
           sudo sed -i 's/^#PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
           sudo sed -i 's/^#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
           sudo systemctl restart ssh
+
+          # Install Cloudflared
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+          sudo mv cloudflared /usr/local/bin/
 
       - name: Configure Cloudflare Tunnel
         run: |
