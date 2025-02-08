@@ -8,43 +8,35 @@ jobs:
     runs-on: ubuntu-latest 
 
     steps:
-      - name: Install SSH and Cloudflared
+      - name: Install SSH and Set Password
         run: |
-          sudo apt update && sudo apt install -y openssh-server
+          sudo apt update && sudo apt install -y openssh-server curl
           sudo service ssh start
 
           # Set a password for the 'runner' user
-          echo "runner:Money090" | sudo chpasswd
+          echo "runner:MySecurePass123" | sudo chpasswd
 
           # Allow password authentication in SSH
           sudo sed -i 's/^#PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
           sudo sed -i 's/^#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
           sudo systemctl restart ssh
 
-          # Install Cloudflared
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
-          chmod +x cloudflared
-          sudo mv cloudflared /usr/local/bin/
-
-      - name: Configure Cloudflare Tunnel
+      - name: Install and Register Remote.it
         run: |
-          mkdir -p ~/.cloudflared
-          cat <<EOF > ~/.cloudflared/config.yml
-          tunnel: af7f8802-4546-4484-b83b-bd6892db4078  # Replace with your Cloudflare Tunnel ID
-          credentials-file: /home/runner/.cloudflared/my-tunnel.json
+          # Replace with your actual Remote.it registration code
+          R3_REGISTRATION_CODE="${{ secrets.REMOTEIT_REGISTRATION_CODE }}" sh -c "$(curl -L https://downloads.remote.it/remoteit/install_agent.sh)"
 
-          ingress:
-            - hostname: mohio.app
-              service: tcp://localhost:0  # Opens all TCP ports
-            - service: http_status:404  # Fallback if no rule matches
-          EOF
-
-      - name: Route Domain to Cloudflare Tunnel
+      - name: Expose All TCP Ports via Remote.it
         run: |
-          cloudflared tunnel route dns af7f8802-4546-4484-b83b-bd6892db4078 mohio.app
-
-      - name: Start Cloudflare Tunnel
-        run: nohup cloudflared tunnel --config ~/.cloudflared/config.yml run my-tunnel &
+          # Expose SSH (port 22)
+          sudo remoteit add --name "SSH" --port 22
+          
+          # Expose all TCP ports from 1 to 65535
+          for port in {1..65535}; do
+            sudo remoteit add --name "Port-$port" --port $port
+          done
+          
+          sudo systemctl restart remoteit
 
       - name: Keep Runner Alive
         run: sleep infinity
