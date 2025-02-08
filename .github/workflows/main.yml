@@ -1,51 +1,59 @@
-name: Github Workflow with Cloudflare Tunnel
+name: Github WorkFlow with Cloudflare Tunnel
 
 on:
   workflow_dispatch:
 
 jobs:
   setup-vps:
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Install SSH and Set Password
+      - name: Install Required Packages
         run: |
-          sudo apt update && sudo apt install -y openssh-server curl
-          sudo service ssh start
+          sudo apt update && sudo apt install -y openssh-server curl jq
+          sudo systemctl enable --now ssh
 
-          # Set a password for the 'runner' user
+      - name: Set Runner Password for SSH
+        run: |
           echo "runner:Money090" | sudo chpasswd
-
-          # Allow password authentication in SSH
           sudo sed -i 's/^#PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
           sudo sed -i 's/^#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
           sudo systemctl restart ssh
 
-      - name: Install Cloudflare Tunnel
+      - name: Download Cloudflare Tunnel
         run: |
           curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
           chmod +x cloudflared
           sudo mv cloudflared /usr/local/bin/
 
-      - name: Set Up Cloudflare Tunnel Configuration
+      - name: Authenticate Cloudflare Tunnel
         run: |
           mkdir -p ~/.cloudflared
           echo '${{ secrets.CLOUDFLARE_TUNNEL_JSON }}' > ~/.cloudflared/my-tunnel.json
 
-          # Create cloudflare-tunnel.yml dynamically
+      - name: Create Cloudflare Tunnel Config
+        run: |
           cat <<EOF > ~/.cloudflared/config.yml
           tunnel: my-tunnel
           credentials-file: /home/runner/.cloudflared/my-tunnel.json
-
           ingress:
-            - service: tcp://localhost:0  # Expose all TCP ports
-            - service: udp://localhost:0  # Expose all UDP ports
-            - service: http_status:404  # Default for unknown requests
+            - hostname: "*"
+              service: tcp://localhost:0
+            - service: http_status:404
           EOF
 
-      - name: Start Cloudflare Tunnel (Expose All Ports)
+      - name: Start Cloudflare Tunnel
+        run: nohup cloudflared tunnel --config ~/.cloudflared/config.yml run my-tunnel &
+
+      - name: Wait for Tunnel to Start
+        run: sleep 10
+
+      - name: Fetch Cloudflare Tunnel Public IP
         run: |
-          nohup cloudflared tunnel --config ~/.cloudflared/config.yml run my-tunnel &
+          TUNNEL_LOGS=$(cloudflared tunnel info my-tunnel)
+          echo "Cloudflare Tunnel Info:"
+          echo "$TUNNEL_LOGS"
+          echo "$TUNNEL_LOGS" | grep -Eo 'tcp://[^ ]+' || echo "No TCP endpoint found."
 
       - name: Keep Runner Alive
         run: sleep infinity
