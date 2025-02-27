@@ -24,5 +24,5 @@ def send_message():
         # Wait for 60 seconds before sending the next message
         time.sleep(60)
 
-if name == "main":
+if __name__ == "__main__":  # Corrected
     send_message()
